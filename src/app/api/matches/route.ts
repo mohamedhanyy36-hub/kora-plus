@@ -1,41 +1,37 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { getPublicPageData } from '@/lib/data';
 
 export async function GET() {
-  const supabase = createSupabaseServerClient();
+  const supabaseClient = createSupabaseServerClient();
 
-  if (!supabase) {
+  if (!supabaseClient) {
     return NextResponse.json(
       {
         ok: false,
         message: 'Supabase is not configured for this environment.'
       },
-      { status: 500 }
+      { status: 503 }
     );
   }
 
-  const [leaguesRes, matchesRes, standingsRes] = await Promise.all([
-    supabase.from('leagues').select('*').order('name', { ascending: true }),
-    supabase.from('matches').select('*').order('kickoff_at', { ascending: true }),
-    supabase.from('standings').select('*').order('position', { ascending: true })
-  ]);
+  try {
+    const data = await getPublicPageData();
 
-  if (leaguesRes.error || matchesRes.error || standingsRes.error) {
+    return NextResponse.json({
+      ok: true,
+      data
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Failed to load matches data.';
+
     return NextResponse.json(
       {
         ok: false,
-        message: leaguesRes.error?.message ?? matchesRes.error?.message ?? standingsRes.error?.message ?? 'Failed to load matches data.'
+        message
       },
       { status: 500 }
     );
   }
-
-  return NextResponse.json({
-    ok: true,
-    data: {
-      leagues: leaguesRes.data ?? [],
-      matches: matchesRes.data ?? [],
-      standings: standingsRes.data ?? []
-    }
-  });
 }
