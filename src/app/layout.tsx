@@ -1,19 +1,14 @@
-import './globals.css';
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import Link from 'next/link';
 
-const inter = Inter({ subsets: ['latin'] });
-
-export const metadata: Metadata = {
-  title: 'Kora Plus',
-  description: 'موقع عربي متخصص في مباريات كرة القدم',
-  metadataBase: new URL('https://example.com')
-};
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function NotFound() {
   return (
-    <html lang="ar" dir="rtl">
-      <body className={`${inter.className} bg-slate-950 text-slate-100 antialiased`}>{children}</body>
-    </html>
+    <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4 text-center">
+      <div>
+        <p className="text-sm text-emerald-300">Kora Plus</p>
+        <h1 className="mt-3 text-5xl font-black text-white">404</h1>
+        <p className="mt-4 text-slate-400">الصفحة التي تبحث عنها غير موجودة.</p>
+        <Link href="/" className="mt-6 inline-block rounded-full bg-emerald-500 px-5 py-3 font-bold text-slate-950">العودة للرئيسية</Link>
+      </div>
+    </main>
   );
 }

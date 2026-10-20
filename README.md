@@ -1,59 +1,92 @@
 # Kora Plus
 
-Kora Plus is a football media website and admin dashboard built with Next.js and Supabase. The public site is Arabic RTL and the admin portal is protected behind secure server-side checks.
+Kora Plus is a football-only website and admin dashboard built with Next.js 14 and Supabase. The public site is Arabic RTL and the admin system is protected with server-side checks and database policies.
 
-## Features
-
-- Public homepage with live/finished/upcoming fixtures
-- Match details, standings, leagues, club profiles, and match filters
-- Admin dashboard at `/admin` with protected access
-- Shared Supabase database for both frontend and admin
-- Row Level Security policies and secure server actions
-- Deployment-ready configuration with environment variables
-
-## Tech stack
+## Stack
 
 - Next.js 14 App Router
+- TypeScript
 - Tailwind CSS
 - Supabase Postgres + Auth + RLS
 
-## Getting started
+## Project structure
 
-1. Copy `.env.example` to `.env.local`
-2. Add your Supabase project values
-3. Run `npm install`
-4. Run `npm run dev`
-5. Visit `http://localhost:3000`
+- Public site: `/`
+- Match detail page: `/matches/[slug]`
+- Admin login: `/admin/login`
+- Admin dashboard: `/admin`
+- SQL schema: `supabase/schema.sql`
+- Example env template: `.env.example`
 
-## Environment variables
+## Local setup
+
+1. Copy the environment template:
+
+```bash
+cp .env.example .env.local
+```
+
+2. Fill in the real values from your Supabase project:
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-public-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
 
-## Database setup
+Important:
+- Keep `SUPABASE_SERVICE_ROLE_KEY` on the server only.
+- Never commit secrets to GitHub.
+- Do not expose the service role key in the browser or logs.
 
-1. Open Supabase SQL editor
-2. Run the SQL from `supabase/schema.sql`
-3. Confirm the admin user is created or create it in Supabase Auth
-4. Add a row in the `settings` table if needed
+3. Install dependencies:
 
-## Admin access
+```bash
+npm install
+```
 
-- Public site: `/`
-- Admin login: `/admin/login`
-- Protected dashboard: `/admin`
+4. Start the app in development mode:
+
+```bash
+npm run dev
+```
+
+Open:
+- http://localhost:3000
+- http://localhost:3000/admin/login
+
+## Supabase setup
+
+1. Create a Supabase project.
+2. Open Supabase SQL Editor.
+3. Run the SQL from `supabase/schema.sql`.
+4. Create a real admin user under Authentication → Users.
+5. Add the user to `public.admin_users` table with `is_active = true`.
+6. Confirm RLS policies are active.
+
+Example SQL for an admin user:
+
+```sql
+insert into public.admin_users (user_id, is_active, role)
+values ('<auth-user-id>', true, 'admin');
+```
+
+## Security requirements
+
+- Admin pages are protected on the server.
+- Every admin action verifies the user session and an active admin record.
+- Public pages only read shared data.
+- Database writes are restricted by RLS and only allowed to valid admins.
 
 ## Deployment
 
-- Deploy the Next.js app to Vercel
-- Add the same environment variables in project settings
-- Set the Supabase URL and keys from the project dashboard
+- Deploy the app to Vercel or any compatible Node hosting platform.
+- Set the same environment variables in the deployment environment.
+- Keep all secret keys outside the client bundle and source control.
 
 ## Notes
 
-- Without Supabase environment variables, the app uses local demo fixture data so it can still render during local development.
-- Real live score updates require the configured Supabase database and an API connector that polls a provider or a scheduled sync worker.
+- The project intentionally avoids fake match data being displayed as if it were live results.
+- If Supabase is not configured, the UI renders empty states instead of fabricated data.
+- Real fixtures and standings come from the configured Supabase tables.

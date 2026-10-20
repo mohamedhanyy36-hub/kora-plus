@@ -1,11 +1,25 @@
 # Next.js
-.next
-node_modules
+.next/
+node_modules/
 
-# Environment
-.env
-.env.local
-.env.*.local
+# Production build outputs
+out/
 
 # Logs
 npm-debug.log*
+*.log
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Vercel
+.vercel/
+
+# Local coverage/test outputs
+coverage/

@@ -1,127 +1,170 @@
-import { MatchCard } from '@/components/MatchCard';
-import { LeagueTable } from '@/components/LeagueTable';
-import { Header } from '@/components/Header';
-import { getHomePageData } from '@/lib/data';
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { signOutAdmin, createMatch, updateMatch, deleteMatch } from '@/app/admin/actions';
+import { getStatusLabel, safeDate } from '@/lib/admin';
 
-export default async function HomePage() {
-  const { matches, standings, leagues } = await getHomePageData();
+async function getAdminPageData() {
+  const supabase = createSupabaseServerClient();
+
+  if (!supabase) {
+    redirect('/admin/login?error=missing-config');
+  }
+
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (!session) {
+    redirect('/admin/login');
+  }
+
+  const { data: adminRow } = await supabase
+    .from('admin_users')
+    .select('user_id')
+    .eq('user_id', session.user.id)
+    .eq('is_active', true)
+    .maybeSingle();
+
+  if (!adminRow) {
+    redirect('/admin/login?error=forbidden');
+  }
+
+  const [leaguesRes, teamsRes, matchesRes, standingsRes] = await Promise.all([
+    supabase.from('leagues').select('*').order('name', { ascending: true }),
+    supabase.from('teams').select('*').order('name', { ascending: true }),
+    supabase.from('matches').select('*').order('kickoff_at', { ascending: true }),
+    supabase.from('standings').select('*').order('position', { ascending: true })
+  ]);
+
+  if (leaguesRes.error || teamsRes.error || matchesRes.error || standingsRes.error) {
+    throw new Error('Unable to load admin data');
+  }
+
+  return {
+    leagues: leaguesRes.data ?? [],
+    teams: teamsRes.data ?? [],
+    matches: matchesRes.data ?? [],
+    standings: standingsRes.data ?? []
+  };
+}
+
+export default async function AdminPage({
+  searchParams
+}: {
+  searchParams?: { error?: string };
+}) {
+  const data = await getAdminPageData();
+  const error = searchParams?.error;
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.18),transparent_30%),linear-gradient(180deg,#020817,#081a17)]">
-      <Header />
-
-      <section className="mx-auto max-w-7xl px-4 pb-12 pt-8 sm:px-6 lg:px-8">
-        <div className="mb-8 flex flex-col gap-6 rounded-3xl border border-emerald-500/20 bg-slate-900/60 p-6 shadow-card backdrop-blur md:flex-row md:items-center md:justify-between">
+    <main className="min-h-screen bg-slate-950 p-6 text-slate-100">
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-6 flex items-center justify-between rounded-2xl border border-slate-700 bg-slate-900 p-5">
           <div>
-            <p className="text-sm font-medium text-emerald-300">تغطية يومية</p>
-            <h1 className="mt-2 text-3xl font-black text-white md:text-5xl">Kora Plus</h1>
+            <p className="text-sm text-emerald-300">لوحة الإدارة</p>
+            <h1 className="text-3xl font-black text-white">Kora Plus Admin</h1>
           </div>
-          <div className="grid grid-cols-2 gap-3 text-sm text-slate-200 sm:grid-cols-4">
-            <div className="rounded-2xl border border-slate-700 bg-slate-950/70 p-3">
-              <p className="text-slate-400">مباريات اليوم</p>
-              <p className="mt-2 text-2xl font-bold text-white">{matches.filter((m) => m.status === 'live').length}</p>
-            </div>
-            <div className="rounded-2xl border border-slate-700 bg-slate-950/70 p-3">
-              <p className="text-slate-400">النتائج</p>
-              <p className="mt-2 text-2xl font-bold text-white">{matches.filter((m) => m.status === 'finished').length}</p>
-            </div>
-            <div className="rounded-2xl border border-slate-700 bg-slate-950/70 p-3">
-              <p className="text-slate-400">القادمة</p>
-              <p className="mt-2 text-2xl font-bold text-white">{matches.filter((m) => m.status === 'upcoming').length}</p>
-            </div>
-            <div className="rounded-2xl border border-slate-700 bg-slate-950/70 p-3">
-              <p className="text-slate-400">الدوريات</p>
-              <p className="mt-2 text-2xl font-bold text-white">{leagues.length}</p>
-            </div>
+          <div className="flex items-center gap-3">
+            <Link href="/" className="rounded-full border border-slate-700 px-4 py-2 text-sm text-slate-200">الموقع العام</Link>
+            <form action={signOutAdmin}>
+              <button className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-bold text-slate-950" type="submit">تسجيل الخروج</button>
+            </form>
           </div>
         </div>
 
-        <div className="mb-10 grid gap-6 lg:grid-cols-[1.7fr_1fr]">
-          <section>
-            <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-2xl font-black text-white">المباريات المباشرة</h2>
-              <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">Live</span>
-            </div>
-            <div className="space-y-4">
-              {matches.filter((match) => match.status === 'live').map((match) => (
-                <MatchCard key={match.id} match={match} />
-              ))}
-            </div>
-          </section>
+        {error && (
+          <div className="mb-6 rounded-2xl border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-200">
+            {decodeURIComponent(error)}
+          </div>
+        )}
 
-          <aside className="space-y-6">
-            <div className="rounded-3xl border border-slate-700 bg-slate-900/70 p-5">
-              <h3 className="mb-4 text-lg font-bold text-white">بطولات اليوم</h3>
-              <div className="space-y-3">
-                {leagues.map((league) => (
-                  <div key={league.id} className="flex items-center justify-between rounded-2xl bg-slate-950/60 px-3 py-2">
-                    <div>
-                      <p className="font-semibold text-white">{league.name}</p>
-                      <p className="text-xs text-slate-400">{league.country}</p>
-                    </div>
-                    <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-xs text-emerald-300">{league.matches}</span>
-                  </div>
+        <div className="mb-8 grid gap-6 md:grid-cols-4">
+          <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5"><p className="text-sm text-slate-400">المباريات</p><p className="mt-2 text-3xl font-black text-white">{data.matches.length}</p></div>
+          <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5"><p className="text-sm text-slate-400">الدوريات</p><p className="mt-2 text-3xl font-black text-white">{data.leagues.length}</p></div>
+          <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5"><p className="text-sm text-slate-400">الفرق</p><p className="mt-2 text-3xl font-black text-white">{data.teams.length}</p></div>
+          <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5"><p className="text-sm text-slate-400">الترتيب</p><p className="mt-2 text-3xl font-black text-white">{data.standings.length}</p></div>
+        </div>
+
+        <div className="mb-8 rounded-3xl border border-slate-700 bg-slate-900/80 p-5">
+          <h2 className="mb-4 text-xl font-black text-white">إضافة مباراة جديدة</h2>
+          <form action={createMatch} className="grid gap-4 md:grid-cols-2">
+            <input name="slug" placeholder="slug" className="rounded-2xl border border-slate-700 bg-slate-950 px-3 py-2 text-white" />
+            <select name="league_id" className="rounded-2xl border border-slate-700 bg-slate-950 px-3 py-2 text-white">
+              <option value="">اختر البطولة</option>
+              {data.leagues.map((league) => (
+                <option key={league.id} value={league.id}>{league.name}</option>
+              ))}
+            </select>
+            <select name="home_team_id" className="rounded-2xl border border-slate-700 bg-slate-950 px-3 py-2 text-white">
+              <option value="">الفريق المضيف</option>
+              {data.teams.map((team) => (
+                <option key={team.id} value={team.id}>{team.name}</option>
+              ))}
+            </select>
+            <select name="away_team_id" className="rounded-2xl border border-slate-700 bg-slate-950 px-3 py-2 text-white">
+              <option value="">الفريق الضيف</option>
+              {data.teams.map((team) => (
+                <option key={team.id} value={team.id}>{team.name}</option>
+              ))}
+            </select>
+            <input type="datetime-local" name="kickoff_at" className="rounded-2xl border border-slate-700 bg-slate-950 px-3 py-2 text-white" />
+            <select name="status" className="rounded-2xl border border-slate-700 bg-slate-950 px-3 py-2 text-white">
+              <option value="upcoming">قادم</option>
+              <option value="live">مباشر</option>
+              <option value="finished">منتهي</option>
+            </select>
+            <input type="number" name="home_score" defaultValue={0} className="rounded-2xl border border-slate-700 bg-slate-950 px-3 py-2 text-white" />
+            <input type="number" name="away_score" defaultValue={0} className="rounded-2xl border border-slate-700 bg-slate-950 px-3 py-2 text-white" />
+            <input name="stadium" placeholder="الملعب" className="rounded-2xl border border-slate-700 bg-slate-950 px-3 py-2 text-white md:col-span-2" />
+            <input name="season" placeholder="الموسم" defaultValue="2025/2026" className="rounded-2xl border border-slate-700 bg-slate-950 px-3 py-2 text-white md:col-span-2" />
+            <textarea name="summary" placeholder="ملخص المباراة" rows={3} className="rounded-2xl border border-slate-700 bg-slate-950 px-3 py-2 text-white md:col-span-2" />
+            <div className="md:col-span-2 flex justify-end">
+              <button type="submit" className="rounded-full bg-emerald-500 px-5 py-3 font-bold text-slate-950">حفظ المباراة</button>
+            </div>
+          </form>
+        </div>
+
+        <section className="rounded-3xl border border-slate-700 bg-slate-900/80 p-5">
+          <h2 className="mb-4 text-xl font-black text-white">إدارة المباريات</h2>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm text-slate-300">
+              <thead className="bg-slate-950 text-slate-400">
+                <tr>
+                  <th className="px-3 py-2 text-right">المباراة</th>
+                  <th className="px-3 py-2 text-right">الحالة</th>
+                  <th className="px-3 py-2 text-right">التاريخ</th>
+                  <th className="px-3 py-2 text-right">النتيجة</th>
+                  <th className="px-3 py-2 text-right">الإجراءات</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.matches.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-3 py-6 text-center text-slate-400">لا توجد مباريات حاليا.</td>
+                  </tr>
+                ) : data.matches.map((match) => (
+                  <tr key={match.id} className="border-t border-slate-800">
+                    <td className="px-3 py-3">
+                      <div className="font-semibold text-white">{match.slug}</div>
+                      <div className="text-xs text-slate-400">{match.stadium}</div>
+                    </td>
+                    <td className="px-3 py-3">{getStatusLabel(match.status)}</td>
+                    <td className="px-3 py-3">{safeDate(match.kickoff_at)}</td>
+                    <td className="px-3 py-3">{match.home_score} - {match.away_score}</td>
+                    <td className="px-3 py-3">
+                      <form action={async () => {
+                        'use server';
+                        await deleteMatch(match.id);
+                      }}>
+                        <button type="submit" className="rounded-full bg-red-500 px-3 py-1.5 text-xs font-bold text-white">حذف</button>
+                      </form>
+                    </td>
+                  </tr>
                 ))}
-              </div>
-            </div>
-            <div className="rounded-3xl border border-slate-700 bg-slate-900/70 p-5">
-              <h3 className="mb-4 text-lg font-bold text-white">الأخبار السريعة</h3>
-              <ul className="space-y-3 text-sm text-slate-300">
-                <li>• تأكيد تغييرات التشكيل قبل النهائي الأوروبي.</li>
-                <li>• جدول البطولة يتم تحديثه تلقائيًا من قاعدة البيانات.</li>
-                <li>• تم ربط كل مباراة بصفحة تفاصيل مستقلة.</li>
-              </ul>
-            </div>
-          </aside>
-        </div>
-
-        <div className="mb-10 grid gap-6 lg:grid-cols-2">
-          <section className="rounded-3xl border border-slate-700 bg-slate-900/70 p-5">
-            <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-2xl font-black text-white">المباريات القادمة</h2>
-              <span className="text-sm text-slate-400">اختار التاريخ والبطولة</span>
-            </div>
-            <div className="space-y-4">
-              {matches.filter((match) => match.status === 'upcoming').slice(0, 4).map((match) => (
-                <MatchCard key={match.id} match={match} compact />
-              ))}
-            </div>
-          </section>
-
-          <section className="rounded-3xl border border-slate-700 bg-slate-900/70 p-5">
-            <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-2xl font-black text-white">النتائج النهائية</h2>
-              <span className="text-sm text-slate-400">آخر 24 ساعة</span>
-            </div>
-            <div className="space-y-4">
-              {matches.filter((match) => match.status === 'finished').slice(0, 4).map((match) => (
-                <MatchCard key={match.id} match={match} compact />
-              ))}
-            </div>
-          </section>
-        </div>
-
-        <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <LeagueTable standings={standings} />
-          <section className="rounded-3xl border border-slate-700 bg-slate-900/70 p-5">
-            <h2 className="mb-4 text-2xl font-black text-white">مواعيد المباريات</h2>
-            <div className="space-y-3">
-              {matches.slice(0, 5).map((match) => (
-                <div key={match.id} className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-950/60 px-3 py-3">
-                  <div>
-                    <p className="text-sm text-slate-400">{match.league}</p>
-                    <p className="font-semibold text-white">{match.homeTeam} vs {match.awayTeam}</p>
-                  </div>
-                  <div className="text-left text-sm text-slate-300">
-                    <p>{new Date(match.kickoffAt).toLocaleDateString('ar-SA')}</p>
-                    <p>{new Date(match.kickoffAt).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        </div>
-      </section>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
     </main>
   );
 }

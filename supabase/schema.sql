@@ -1,67 +1,179 @@
-export const mockLeagues = [
-  { id: 1, name: 'دوري روشن', country: 'السعودية', matches: 8 },
-  { id: 2, name: 'الدوري الإنجليزي', country: 'إنجلترا', matches: 6 },
-  { id: 3, name: 'الدوري الإسباني', country: 'إسبانيا', matches: 5 },
-  { id: 4, name: 'الدوري الإيطالي', country: 'إيطاليا', matches: 4 }
-];
+-- Kora Plus database schema for Supabase
+create extension if not exists "uuid-ossp";
 
-export const mockStandings = [
-  { id: 1, position: 1, name: 'الاهلي', badge: 'A', played: 10, won: 8, points: 24 },
-  { id: 2, position: 2, name: 'النصر', badge: 'N', played: 10, won: 7, points: 22 },
-  { id: 3, position: 3, name: 'الهلال', badge: 'H', played: 10, won: 7, points: 21 },
-  { id: 4, position: 4, name: 'الاتحاد', badge: 'I', played: 10, won: 6, points: 18 }
-];
+create table if not exists public.leagues (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  country text,
+  logo_url text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
 
-export const mockMatches = [
-  {
-    id: 1,
-    slug: 'al-ahli-vs-al-nasr',
-    status: 'live',
-    statusLabel: 'مباشر',
-    league: 'دوري روشن',
-    season: '2025/2026',
-    stadium: 'ملعب الملك فهد',
-    homeTeam: 'الأهلي',
-    awayTeam: 'النصر',
-    homeBadge: 'A',
-    awayBadge: 'N',
-    homeScore: 2,
-    awayScore: 1,
-    kickoffAt: '2026-10-21T18:30:00.000Z',
-    summary: 'تجري مباراة قوية بين الفريقين في المباراة الحاسمة, مع سيطرة متوترة واندفاع هجومي من الطرفين.'
-  },
-  {
-    id: 2,
-    slug: 'al-hilal-vs-al-ittihad',
-    status: 'finished',
-    statusLabel: 'انتهت',
-    league: 'دوري روشن',
-    season: '2025/2026',
-    stadium: 'ملعب الأمير محمد بن فهد',
-    homeTeam: 'الهلال',
-    awayTeam: 'الاتحاد',
-    homeBadge: 'H',
-    awayBadge: 'I',
-    homeScore: 3,
-    awayScore: 2,
-    kickoffAt: '2026-10-20T16:00:00.000Z',
-    summary: 'مباراة متقاربة انتهت بهزيمة الاتحاد في الدقيقة الأخيرة بعد هدف حاسم من الهلال.'
-  },
-  {
-    id: 3,
-    slug: 'chelsea-vs-liverpool',
-    status: 'upcoming',
-    statusLabel: 'قريبًا',
-    league: 'الدوري الإنجليزي',
-    season: '2025/2026',
-    stadium: 'ستامفورد بريدج',
-    homeTeam: 'تشيلسي',
-    awayTeam: 'ليفربول',
-    homeBadge: 'C',
-    awayBadge: 'L',
-    homeScore: null,
-    awayScore: null,
-    kickoffAt: '2026-10-23T20:00:00.000Z',
-    summary: 'مباراة كبرى تجمع بين فريقي كبيرين في ليلة قوية من الجولة المرتقبة.'
-  }
-];
+create table if not exists public.teams (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  short_name text,
+  country text,
+  logo_url text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.matches (
+  id uuid primary key default uuid_generate_v4(),
+  slug text not null unique,
+  league_id uuid not null references public.leagues(id) on delete restrict,
+  home_team_id uuid not null references public.teams(id) on delete restrict,
+  away_team_id uuid not null references public.teams(id) on delete restrict,
+  kickoff_at timestamptz not null,
+  status text not null default 'upcoming' check (status in ('upcoming', 'live', 'finished')),
+  home_score integer not null default 0,
+  away_score integer not null default 0,
+  stadium text,
+  season text,
+  summary text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint valid_fixture_teams check (home_team_id <> away_team_id)
+);
+
+create table if not exists public.standings (
+  id uuid primary key default uuid_generate_v4(),
+  league_id uuid not null references public.leagues(id) on delete cascade,
+  team_id uuid not null references public.teams(id) on delete cascade,
+  position integer not null default 1,
+  played integer not null default 0,
+  won integer not null default 0,
+  drawn integer not null default 0,
+  lost integer not null default 0,
+  goals_for integer not null default 0,
+  goals_against integer not null default 0,
+  points integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (league_id, team_id)
+);
+
+create table if not exists public.admin_users (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  is_active boolean not null default true,
+  role text not null default 'admin' check (role in ('admin')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_matches_league_kickoff
+  on public.matches (league_id, kickoff_at);
+create index if not exists idx_matches_status
+  on public.matches (status);
+create index if not exists idx_standings_league_position
+  on public.standings (league_id, position);
+create index if not exists idx_admin_users_active
+  on public.admin_users (is_active);
+
+alter table public.leagues enable row level security;
+alter table public.teams enable row level security;
+alter table public.matches enable row level security;
+alter table public.standings enable row level security;
+alter table public.admin_users enable row level security;
+
+create or replace function public.is_admin_user()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, auth, pg_catalog
+as $$
+  select exists (
+    select 1
+    from public.admin_users au
+    where au.user_id = auth.uid()
+      and au.is_active = true
+  );
+$$;
+
+create or replace function public.handle_updated_at()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_catalog
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+create trigger set_updated_at_leagues
+before update on public.leagues
+for each row execute procedure public.handle_updated_at();
+
+create trigger set_updated_at_teams
+before update on public.teams
+for each row execute procedure public.handle_updated_at();
+
+create trigger set_updated_at_matches
+before update on public.matches
+for each row execute procedure public.handle_updated_at();
+
+create trigger set_updated_at_standings
+before update on public.standings
+for each row execute procedure public.handle_updated_at();
+
+create trigger set_updated_at_admin_users
+before update on public.admin_users
+for each row execute procedure public.handle_updated_at();
+
+create policy "Public view leagues"
+on public.leagues for select using (true);
+create policy "Public view teams"
+on public.teams for select using (true);
+create policy "Public view matches"
+on public.matches for select using (true);
+create policy "Public view standings"
+on public.standings for select using (true);
+
+create policy "Admins can manage leagues"
+on public.leagues for all
+using (public.is_admin_user())
+with check (public.is_admin_user());
+
+create policy "Admins can manage teams"
+on public.teams for all
+using (public.is_admin_user())
+with check (public.is_admin_user());
+
+create policy "Admins can manage matches"
+on public.matches for all
+using (public.is_admin_user())
+with check (public.is_admin_user());
+
+create policy "Admins can manage standings"
+on public.standings for all
+using (public.is_admin_user())
+with check (public.is_admin_user());
+
+create policy "Admins can manage admin_users"
+on public.admin_users for all
+using (public.is_admin_user())
+with check (public.is_admin_user());
+
+-- Example seed data. This is intentionally minimal and safe for initial setup.
+insert into public.leagues (name, country, logo_url)
+values ('دوري روشن', 'السعودية', ''),
+       ('الدوري الإنجليزي', 'إنجلترا', ''),
+       ('الدوري الإسباني', 'إسبانيا', '')
+on conflict do nothing;
+
+insert into public.teams (name, short_name, country, logo_url)
+values ('الأهلي', 'AHL', 'السعودية', ''),
+       ('النصر', 'NAS', 'السعودية', ''),
+       ('الهلال', 'HIL', 'السعودية', ''),
+       ('الاتحاد', 'ITS', 'السعودية', ''),
+       ('تشيلسي', 'CHE', 'إنجلترا', ''),
+       ('ليفربول', 'LIV', 'إنجلترا', '')
+on conflict do nothing;
+
+-- Matches are created only when you intentionally insert them in the dashboard.
+-- No mock score data is committed here.
