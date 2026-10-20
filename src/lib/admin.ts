@@ -3,6 +3,11 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 export async function requireAdminSession() {
   const supabase = createSupabaseServerClient();
+
+  if (!supabase) {
+    redirect('/admin/login?error=missing-config');
+  }
+
   const {
     data: { session }
   } = await supabase.auth.getSession();

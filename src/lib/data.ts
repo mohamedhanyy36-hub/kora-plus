@@ -3,6 +3,14 @@ import { createSupabaseServerClient } from '@/lib/supabase/server';
 export async function getPublicPageData() {
   const client = createSupabaseServerClient();
 
+  if (!client) {
+    return {
+      leagues: [],
+      matches: [],
+      standings: []
+    };
+  }
+
   const [leaguesRes, matchesRes, standingsRes] = await Promise.all([
     client.from('leagues').select('*').order('name', { ascending: true }),
     client.from('matches').select('*').order('kickoff_at', { ascending: true }),
@@ -30,6 +38,10 @@ export async function getPublicPageData() {
 
 export async function getMatchBySlug(slug: string) {
   const client = createSupabaseServerClient();
+
+  if (!client) {
+    return null;
+  }
 
   const { data, error } = await client
     .from('matches')

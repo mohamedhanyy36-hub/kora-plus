@@ -3,11 +3,15 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
-import { requireAdminSession, getStatusLabel } from '@/lib/admin';
+import { requireAdminSession } from '@/lib/admin';
 
 export async function signOutAdmin() {
   const supabase = createSupabaseServerClient();
-  await supabase.auth.signOut();
+
+  if (supabase) {
+    await supabase.auth.signOut();
+  }
+
   redirect('/admin/login');
 }
 
@@ -20,6 +24,11 @@ export async function signInAdmin(formData: FormData) {
   }
 
   const supabase = createSupabaseServerClient();
+
+  if (!supabase) {
+    redirect('/admin/login?error=missing-config');
+  }
+
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
@@ -33,7 +42,7 @@ export async function createMatch(formData: FormData) {
   const { supabase } = await requireAdminSession();
 
   const payload = {
-    slug: String(formData.get('slug') ?? '').trim() || `${Date.now()}`,
+    slug: String(formData.get('slug') ?? '').trim() || `match-${Date.now()}`,
     league_id: String(formData.get('league_id') ?? ''),
     home_team_id: String(formData.get('home_team_id') ?? ''),
     away_team_id: String(formData.get('away_team_id') ?? ''),
@@ -98,5 +107,3 @@ export async function deleteMatch(matchId: string) {
   revalidatePath('/admin');
   redirect('/admin');
 }
-
-export { getStatusLabel };
